@@ -75,10 +75,65 @@ When running in Kubernetes mode, ClawHive provides the following custom resource
 | `NotifyTransport` | Defines notification transport (terminal, webhook, etc.) |
 | `Skill` | Declares a reusable skill prompt |
 
+## Triage System
+
+ClawHive includes a **two-stage message classification** system (triage) that optimizes cost and latency by routing messages to appropriate processing strategies:
+
+| Strategy | Behavior |
+|----------|----------|
+| `silent` | Message produces no output. Useful for acknowledgments. |
+| `memory_only` | Message is saved to memory but no LLM response is generated. |
+| `brief` | A short, lightweight response is generated. |
+| `tool_only` | Response is limited to tool invocations without explanatory text. |
+| `full` | Standard full LLM processing with all capabilities. |
+
+The triage classifier uses a lightweight LLM call to evaluate the incoming message context (last 5 messages) and selects the appropriate strategy. If the triage LLM fails, the system **fails open** to `full` processing, ensuring no messages are lost.
+
+## Streaming Events
+
+When processing messages, agents emit a sequence of **streaming events** through a channel:
+
+| Event | Description |
+|-------|-------------|
+| `token` | Text increment from the LLM's streaming response |
+| `triage_decision` | Triage classification result (strategy + reasoning) |
+| `skipped` | Message was skipped by triage (silent/memory_only) |
+| `tool_start` | Tool invocation has begun |
+| `tool_result` | Tool execution has completed |
+| `error` | An error occurred during processing |
+| `done` | Stream is complete, no more events |
+
+A typical event sequence: `token → token → ... → tool_start → tool_result → token → ... → done`
+
+## REPL
+
+The interactive **REPL** (Read-Eval-Print Loop) is the primary way to interact with agents. When you run an agent, it starts a REPL session with these slash commands:
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show available commands |
+| `/skills` | List loaded skills |
+| `/memory` | Show current memory entries |
+| `/cron` | Show configured cron jobs |
+| `/clear` | Clear conversation history |
+| `/quit` or `/exit` | Exit the REPL |
+
+The REPL also handles cron-injected prompts automatically — when a cron job fires, its output appears inline with the conversation.
+
+## Sandbox Modes
+
+ClawHive supports two execution modes for agents:
+
+| Mode | Command | Description |
+|------|---------|-------------|
+| **Local** | `clawhive run --local ./agent` | Agent runs directly on the host machine. Tools execute in the local filesystem. Best for development. |
+| **Docker** | `clawhive run ./agent` | Agent runs inside an isolated Docker container. The `sandbox.image` and `sandbox.workdir` from agent config determine the container environment. Best for production and untrusted code. |
+
 ## Message Flow
 
 1. Input arrives via REPL, API, or cron-injected prompt
 2. System prompt is assembled from soul + memory + skills + notify capabilities
-3. LLM is called (with streaming if supported)
-4. Tool calls are executed in a loop (max 20 rounds), results fed back to LLM
-5. Response is rendered to the user or sent via notification transport
+3. Optional triage classification (if triage LLM is configured)
+4. LLM is called (with streaming if supported)
+5. Tool calls are executed in a loop (max 20 rounds), results fed back to LLM
+6. Response is rendered to the user or sent via notification transport

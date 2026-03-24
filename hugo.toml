@@ -1,6 +1,14 @@
 baseURL = 'https://clawhive.io/'
 languageCode = 'en-us'
 title = 'ClawHive'
+defaultContentLanguage = 'en'
+
+# Redirect root to default language
+[languages]
+  [languages.en]
+    title = "ClawHive"
+    languageName = "English"
+    weight = 1
 
 # Enable Git info for lastmod
 enableGitInfo = false

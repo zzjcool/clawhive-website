@@ -31,7 +31,27 @@ go install github.com/clawhive/clawhive/cmd/clawhive@latest
 
 ### 1. Create an Agent Package
 
-Create a directory with an `agent.yaml` configuration:
+Create a directory with a `package.yaml` manifest and an `agent.yaml` configuration:
+
+```
+my-agent/
+├── package.yaml       # Package manifest
+└── agent.yaml         # Agent configuration
+```
+
+**package.yaml:**
+
+```yaml
+apiVersion: clawhive/v1
+kind: Package
+metadata:
+  name: my-agent
+  version: "1.0.0"
+  description: "My first ClawHive agent"
+agent: agent.yaml
+```
+
+**agent.yaml:**
 
 ```yaml
 apiVersion: clawhive/v1
@@ -59,11 +79,29 @@ API_KEY=your-api-key
 
 ### 3. Run the Agent
 
+**Local mode** (runs on host machine, best for development):
+
 ```bash
 clawhive run --local ./my-agent
 ```
 
-The agent starts an interactive REPL where you can chat with it directly.
+**Docker mode** (runs inside an isolated container, best for production):
+
+```bash
+clawhive run ./my-agent
+```
+
+The agent starts an interactive REPL where you can chat with it directly. Use `/help` to see available commands.
+
+### 4. Using the REPL
+
+Once the REPL is running, you can:
+
+- Type messages directly to chat with the agent
+- Use `/help` to see available slash commands
+- Use `/skills`, `/memory`, `/cron` to inspect agent state
+- Use `/clear` to reset conversation history
+- Use `/quit` to exit
 
 ## Next Steps
 

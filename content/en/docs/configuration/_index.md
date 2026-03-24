@@ -65,6 +65,98 @@ spec:
           url: "https://example.com/webhook"
 ```
 
+## Platform Configuration
+
+A **Platform** manages multiple agent groups and provides shared infrastructure including an MQTT broker, agent registry, and task dispatcher.
+
+```yaml
+apiVersion: clawhive/v1
+kind: Platform
+metadata:
+  name: clawhive-platform
+spec:
+  mqtt:
+    host: "0.0.0.0"         # MQTT broker bind address
+    port: 1883               # MQTT broker port
+    maxConnections: 1000     # Max concurrent connections
+  registry:
+    persistence:
+      path: "/tmp/clawhive/registry"  # Agent registry storage path
+  taskManager:
+    staleTimeout: "1h"       # Timeout for stale task detection
+  dispatcher:
+    strategy: "first-available"  # Task dispatch strategy
+```
+
+### Platform Fields
+
+| Field | Description |
+|-------|-------------|
+| `mqtt.host` | MQTT broker bind address |
+| `mqtt.port` | MQTT broker port |
+| `mqtt.maxConnections` | Maximum concurrent MQTT connections |
+| `registry.persistence.path` | Filesystem path for agent registry persistence |
+| `taskManager.staleTimeout` | Duration after which tasks are considered stale |
+| `dispatcher.strategy` | Strategy for routing tasks to agents (`first-available`, etc.) |
+
+### Running a Platform
+
+```bash
+clawhive platform run ./config/platform.yaml
+```
+
+## AgentGroup Configuration
+
+An **AgentGroup** organizes multiple agents that communicate through channels using the A2A protocol.
+
+```yaml
+apiVersion: clawhive/v1
+kind: AgentGroup
+metadata:
+  name: code-review-team
+  labels:
+    domain: engineering
+spec:
+  description: "A team of agents collaborating on code review"
+  version: "1.0.0"
+  members:
+    - agentId: alpha
+      role: reviewer
+      description: "Senior code reviewer, focuses on architecture and design patterns"
+    - agentId: beta
+      role: developer
+      description: "Backend developer responsible for auth and user management"
+    - agentId: gamma
+      role: tester
+      description: "QA specialist focusing on integration tests and edge cases"
+  communication:
+    transport: mqtt
+    config:
+      broker:
+        host: localhost
+        port: 1883
+    defaultChannel:
+      enabled: true
+      name: code-review-team
+    dynamicChannels: true
+```
+
+### AgentGroup Fields
+
+| Field | Description |
+|-------|-------------|
+| `metadata.name` | Group name (unique identifier) |
+| `metadata.labels` | Key-value labels for grouping and discovery |
+| `spec.description` | Human-readable description of the group |
+| `spec.version` | Group configuration version |
+| `spec.members` | List of agent members with IDs, roles, and descriptions |
+| `spec.members[].agentId` | References an agent by its ID |
+| `spec.members[].role` | Role of the agent within the group |
+| `spec.communication.transport` | Transport protocol (`mqtt`) |
+| `spec.communication.config.broker` | MQTT broker connection settings |
+| `spec.communication.defaultChannel` | Default channel for group communication |
+| `spec.communication.dynamicChannels` | Whether agents can create channels dynamically |
+
 ## Environment Variables
 
 ClawHive supports `${ENV_VAR}` syntax in configuration values. Environment variables are loaded from:
@@ -81,13 +173,26 @@ ClawHive supports `${ENV_VAR}` syntax in configuration values. Environment varia
 
 ## Package Manifest
 
+Each agent package requires a `package.yaml` manifest:
+
 ```yaml
-name: my-agent
-version: 1.0.0
-description: "A sample agent package"
-agent:
-  path: ./agent.yaml
+apiVersion: clawhive/v1
+kind: Package
+metadata:
+  name: my-agent
+  version: "1.0.0"
+  description: "A sample agent package"
+agent: agent.yaml
 ```
+
+| Field | Description |
+|-------|-------------|
+| `apiVersion` | API version, always `clawhive/v1` |
+| `kind` | Resource type, always `Package` |
+| `metadata.name` | Package name |
+| `metadata.version` | Package version (semver) |
+| `metadata.description` | Human-readable description |
+| `agent` | Path to the agent configuration file (relative to the package directory) |
 
 ## Validation
 
