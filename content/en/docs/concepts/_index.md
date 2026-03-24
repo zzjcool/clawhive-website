@@ -64,16 +64,33 @@ The **A2A Protocol** enables communication between agents over MQTT using JSON-R
 
 ## Kubernetes CRDs
 
-When running in Kubernetes mode, ClawHive provides the following custom resources:
+ClawHive transforms into a **Kubernetes-native operator** when running on K8s. Instead of imperative Docker commands, every resource becomes a declarative CRD:
 
-| CRD | Description |
-|-----|-------------|
-| `Agent` | Defines an individual agent with LLM, tools, and memory config |
-| `AgentGroup` | Manages a group of agents with shared channels |
-| `Platform` | Top-level resource managing the multi-agent platform |
-| `LLMProvider` | Configures LLM provider credentials and endpoints |
-| `NotifyTransport` | Defines notification transport (terminal, webhook, etc.) |
-| `Skill` | Declares a reusable skill prompt |
+| CRD | Scope | Purpose |
+|-----|-------|---------|
+| `LLMProvider` | Namespace | Shared LLM credentials and config |
+| `Skill` | Namespace | Reusable skill definitions |
+| `NotifyTransport` | Namespace | Notification channel configs |
+| `Platform` | Namespace | Singleton MQTT broker infrastructure |
+| `AgentTemplate` | Namespace | Reusable agent config blueprint |
+| `AgentGroup` | Namespace | Orchestrates multiple Agent instances |
+| `Agent` | Namespace | Running agent instance (auto-created, maps 1:1 to Pod) |
+
+### Kubernetes Resource Hierarchy
+
+ClawHive mirrors Kubernetes native patterns:
+
+```
+AgentGroup → Agent → Pod
+(like Deployment → ReplicaSet → Pod)
+```
+
+- **AgentTemplate**: User creates. Reusable blueprint for agent configuration.
+- **AgentGroup**: User creates. References AgentTemplates and specifies members.
+- **Agent**: Auto-created by AgentGroup Controller from template instances.
+- **Pod**: Auto-created by Agent Controller. Actual running container.
+
+See [Kubernetes documentation](../kubernetes/) for detailed CRD specifications.
 
 ## Triage System
 

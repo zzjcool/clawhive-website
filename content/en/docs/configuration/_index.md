@@ -5,99 +5,235 @@ weight: 4
 description: "How to configure ClawHive agents and platforms"
 ---
 
-## Agent Configuration
+## Configuration Modes
 
-Agent configuration uses Kubernetes-style YAML format:
+ClawHive supports two operational modes:
+
+### 1. Docker Mode (Legacy)
+
+Run agents locally or in Docker containers with imperative CLI commands. Configuration uses YAML files.
+
+### 2. Kubernetes Mode (Current)
+
+Declarative resource management using Kubernetes CRDs. Recommended for production and multi-agent scenarios.
+
+## Kubernetes Configuration (Recommended)
+
+When running on Kubernetes, all resources are declarative CRs. See the [Kubernetes](../kubernetes/) documentation for detailed examples.
+
+### LLMProvider
+
+```yaml
+apiVersion: clawhive.io/v1alpha1
+kind: LLMProvider
+metadata:
+  name: openai-gpt4
+spec:
+  provider: openai
+  model: gpt-4
+  secretRef:
+    name: llm-secrets
+    key: api-key
+```
+
+### AgentTemplate
+
+```yaml
+apiVersion: clawhive.io/v1alpha1
+kind: AgentTemplate
+metadata:
+  name: my-agent
+spec:
+  sandbox:
+    image: debian:bookworm-slim
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 200m
+  llmProviderRef:
+    name: openai-gpt4
+  soul:
+    system: "You are a helpful assistant"
+  skillRefs:
+    - name: web-search
+```
+
+### AgentGroup
+
+```yaml
+apiVersion: clawhive.io/v1alpha1
+kind: AgentGroup
+metadata:
+  name: my-group
+spec:
+  platformRef:
+    name: clawhive
+  members:
+    - templateRef:
+        name: my-agent
+      role: assistant
+```
+
+See [Kubernetes documentation](../kubernetes/#crd-reference) for complete CRD specifications.
+
+## Docker Configuration (Local Development)
+
+For local development without Kubernetes, you can use the traditional Docker-based configuration:
+
+### Agent YAML
 
 ```yaml
 apiVersion: clawhive/v1
 kind: Agent
 metadata:
-  name: agent-name
-  description: "Agent description"
+  name: my-agent
+  description: "Local test agent"
 spec:
-  # Sandbox configuration (Docker container)
   sandbox:
     image: debian:bookworm-slim
     workdir: /workspace
 
-  # LLM provider settings
   llm:
-    provider: openai  # openai | anthropic | deepseek
+    provider: openai
     model: ${LLM_MODEL}
     apiKey: ${API_KEY}
-    baseURL: ${API_BASE_URL}  # Optional, for custom endpoints
+    baseURL: ${API_BASE_URL}  # Optional
 
-  # System prompt
   soul:
     system: "You are a helpful assistant."
     traits: [helpful, concise]
 
-  # Memory configuration
   memory:
     backend: filesystem
     config:
       path: ./data/agent/memory
 
-  # Skills
   skills:
-    - name: skill-name
-      path: ./skills/skill.md
+    - name: web-search
+      path: ./skills/search.md
 
-  # Cron jobs
   cron:
     - name: daily-summary
       schedule: "0 8 * * *"
-      prompt: "Generate a daily summary"
-      notify:
-        channels: [terminal]
-        priority: normal
+      prompt: "Generate daily summary"
 
-  # Notifications
   notify:
     defaults: [terminal]
     transports:
       - name: terminal
         type: terminal
-      - name: webhook
-        type: webhook
-        config:
-          url: "https://example.com/webhook"
 ```
 
-## Platform Configuration
+Run with:
 
-A **Platform** manages multiple agent groups and provides shared infrastructure including an MQTT broker, agent registry, and task dispatcher.
+```bash
+clawhive run my-agent/
+clawhive run --local my-agent/  # Local (no Docker)
+```
+
+## Environment Variables
+
+Both Kubernetes and Docker modes support environment variable substitution. Variables are loaded from:
+
+1. System environment
+2. `.env` file in the working directory
+3. `.env` file in the config directory
+
+### Common Variables
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `API_KEY` | LLM provider API key | `sk-...` |
+| `API_BASE_URL` | LLM API endpoint | `https://api.openai.com/v1` |
+| `LLM_MODEL` | Model name | `gpt-4` |
+| `MQTT_BROKER` | MQTT endpoint (K8s auto-set) | `mqtt:1883` |
+
+## Agent Package Structure
+
+When using Docker mode, organize agents in packages:
+
+```
+my-agent/
+├── package.yaml       # Package metadata
+├── agent.yaml         # Agent configuration
+└── skills/            # Skill definitions
+    ├── search.md
+    └── analysis.md
+```
+
+### package.yaml
 
 ```yaml
 apiVersion: clawhive/v1
-kind: Platform
+kind: Package
 metadata:
-  name: clawhive-platform
+  name: my-agent-pkg
+  version: "1.0.0"
 spec:
-  mqtt:
-    host: "0.0.0.0"         # MQTT broker bind address
-    port: 1883               # MQTT broker port
-    maxConnections: 1000     # Max concurrent connections
-  registry:
-    persistence:
-      path: "/tmp/clawhive/registry"  # Agent registry storage path
-  taskManager:
-    staleTimeout: "1h"       # Timeout for stale task detection
-  dispatcher:
-    strategy: "first-available"  # Task dispatch strategy
+  description: "My agent package"
+  agentRef:
+    path: agent.yaml
 ```
 
-### Platform Fields
+### Skills
 
-| Field | Description |
-|-------|-------------|
-| `mqtt.host` | MQTT broker bind address |
-| `mqtt.port` | MQTT broker port |
-| `mqtt.maxConnections` | Maximum concurrent MQTT connections |
-| `registry.persistence.path` | Filesystem path for agent registry persistence |
-| `taskManager.staleTimeout` | Duration after which tasks are considered stale |
-| `dispatcher.strategy` | Strategy for routing tasks to agents (`first-available`, etc.) |
+Skills are markdown files that extend the agent's capabilities:
+
+```markdown
+# Web Search
+
+You can search the web for information using the `web_search` tool.
+
+## Usage
+
+When asked to search for something, use the tool:
+
+\`\`\`
+web_search(query: "your search query")
+\`\`\`
+```
+
+Reference skills in your agent config:
+
+```yaml
+spec:
+  skills:
+    - name: web-search
+      path: ./skills/search.md
+```
+
+## Secrets Management
+
+### Kubernetes Mode
+
+Use K8s Secrets for sensitive data:
+
+```bash
+kubectl create secret generic llm-secrets \
+  --from-literal=api-key=$API_KEY
+```
+
+Reference in CRs:
+
+```yaml
+spec:
+  secretRef:
+    name: llm-secrets
+    key: api-key
+```
+
+Or use `clawhive apply` with `.env` files (auto-creates Secret).
+
+### Docker Mode
+
+Use `.env` files or environment variables:
+
+```bash
+export API_KEY=sk-...
+clawhive run my-agent/
+```
+
+**Do not commit `.env` files to version control.**
 
 ### Running a Platform
 
