@@ -1,10 +1,14 @@
-.PHONY: build serve clean
+.PHONY: build serve deps clean
+
+deps:
+	npm install postcss postcss-cli autoprefixer bootstrap @fortawesome/fontawesome-free
 
 build:
-	NODE_PATH=/root/.nvm/versions/node/v24.13.1/lib/node_modules hugo --source . --minify
+	hugo mod tidy
+	hugo --minify
 
 serve:
-	NODE_PATH=/root/.nvm/versions/node/v24.13.1/lib/node_modules hugo --source . server -D
+	hugo server -D
 
 clean:
 	rm -rf public/ resources/
